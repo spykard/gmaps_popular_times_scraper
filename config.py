@@ -8,8 +8,8 @@ DELIM = ','
 HEADER_COLUMNS = ('place', 'url', 'scrape_time', 'day_of_week', 'hour_of_day', 'popularity_percent_normal', 'popularity_percent_current')
 
 # path to chrome and chromedriver
-CHROME_BINARY_LOCATION = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
-CHROMEDRIVER_BINARY_LOCATION = '/usr/local/bin/chromedriver'
+CHROME_BINARY_LOCATION = 'C:\Program Files (x86)\Google\Chrome\Application\chrome.exe'
+CHROMEDRIVER_BINARY_LOCATION = 'chromedriver.exe'
 
 # keep an cache of the source htmls, with a timestamp in the filename
 # if so, they should be cleaned out once in a while, since they are 1MB each

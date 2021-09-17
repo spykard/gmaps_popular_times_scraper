@@ -16,6 +16,7 @@ from selenium.common.exceptions import TimeoutException
 from bs4 import BeautifulSoup
 from datetime import datetime
 import pandas as pd
+import os
 
 # load local params from config.py
 import config
@@ -26,12 +27,17 @@ days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Satur
 # generate unique runtime for this job
 run_time = datetime.now().strftime('%Y%m%d_%H%M%S')
 
+# filepaths
+dirname = os.path.dirname(__file__)
+
 def main():
 	# read the list of URLs from a URL, or path to a local csv
 	if not config.DEBUG:
 		if len(sys.argv) > 1:
 			# read path to file from system arguments
-			urls = pd.read_csv(sys.argv[1])
+			#urls = pd.read_csv(sys.argv[1])
+			urls = pd.read_csv(os.path.join(dirname, sys.argv[1]))
+
 		else:
 			# get path to file from config.py
 			urls = pd.read_csv(config.URL_PATH_INPUT)
@@ -50,8 +56,8 @@ def main():
 
 		try:
 			data = run_scraper(url)
-		except:
-			print('ERROR:', url, run_time)
+		except Exception as e:
+			print('ERROR ' + str(e) + url, run_time)
 			# go to next url
 			continue
 
@@ -114,8 +120,8 @@ def get_html(u,file_name):
 	else:
 		# requires chromedriver
 		options = webdriver.ChromeOptions()
-		#options.add_argument('--start-maximized')
-		options.add_argument('--headless')
+		options.add_argument('--start-maximized')
+		#options.add_argument('--headless')
 		# https://stackoverflow.com/a/55152213/2327328
 		# I choose German because the time is 24h, less to parse
 		options.add_argument('--lang=de-DE')
@@ -130,7 +136,7 @@ def get_html(u,file_name):
 		# timeout after max N seconds (config.py)
 		# based on https://stackoverflow.com/questions/26566799/wait-until-page-is-loaded-with-selenium-webdriver-for-python
 		try:
-			WebDriverWait(d, config.SLEEP_SEC).until(EC.presence_of_element_located((By.CLASS_NAME, 'section-popular-times-bar')))
+			WebDriverWait(d, config.SLEEP_SEC).until(EC.presence_of_element_located((By.CLASS_NAME, 'section-popular-times')))
 		except TimeoutException:
 			print('ERROR: Timeout! (This could be due to missing "popular times" data, or not enough waiting.)',u)
 
@@ -149,52 +155,58 @@ def parse_html(html):
 
 	soup = BeautifulSoup(html,features='html.parser')
 
-	pops = soup.find_all('div', {'class': 'section-popular-times-bar'})
-
+	pops = soup.find_all('div', {'class': 'section-popular-times-graph'})
+	
 	hour = 0
 	dow = 0
 	data = []
 
 	for pop in pops:
-		# note that data is stored sunday first, regardless of the local
-		t = pop['aria-label']
-		# debugging
-		#print(t)
-
-		hour_prev = hour
-		freq_now = None
-
-		try:
-			if 'normal' not in t:
-				hour = int(t.split()[1])
-				freq = int(t.split()[4]) # gm uses int
+		day = pop.findChildren("div" , recursive=False)
+		for child in day:
+			print(child)
+			if child.has_attr('aria-label'):
+			# note that data is stored sunday first, regardless of the local
+				t = child['aria-label']
 			else:
-				# the current hour has special text
-				# hour is the previous value + 1
-				hour = hour + 1
-				freq = int(t.split()[-2])
+				continue
+			# debugging
+			#print(t)
 
-				# gmaps gives the current popularity,
-				# but only the current hour has it
-				try:
-					freq_now = int(t.split()[2])
-				except:
-					freq_now = None
+			hour_prev = hour
+			freq_now = None
 
-			if hour < hour_prev:
-				# increment the day if the hour decreases
+			try:
+				if 'normal' not in t:
+					hour = int(t.split()[1])
+					freq = int(t.split()[4]) # gm uses int
+				else:
+					# the current hour has special text
+					# hour is the previous value + 1
+					hour = hour + 1
+					freq = int(t.split()[-2])
+
+					# gmaps gives the current popularity,
+					# but only the current hour has it
+					try:
+						freq_now = int(t.split()[2])
+					except:
+						freq_now = None
+
+				if hour < hour_prev:
+					# increment the day if the hour decreases
+					dow += 1
+
+				data.append([days[dow % 7], hour, freq, freq_now])
+				# could also store an array of dictionaries
+				#data.append({'day' : days[dow % 7], 'hour' : hour, 'popularity' : freq})
+
+			except:
+				# if a day is missing, the line(s) won't be parsable
+				# this can happen if the place is closed on that day
+				# skip them, hope it's only 1 day per line,
+				# and increment the day counter
 				dow += 1
-
-			data.append([days[dow % 7], hour, freq, freq_now])
-			# could also store an array of dictionaries
-			#data.append({'day' : days[dow % 7], 'hour' : hour, 'popularity' : freq})
-
-		except:
-			# if a day is missing, the line(s) won't be parsable
-			# this can happen if the place is closed on that day
-			# skip them, hope it's only 1 day per line,
-			# and increment the day counter
-			dow += 1
 
 	return data
 
